@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.1
+// @version      19.9.8.2
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -218,6 +218,21 @@
         }
         return [];
     }
+
+    // Fallback estructural: <span>número</span> seguido de <span>VES|USD|...</span>
+function buscarMontoEstructural(raiz) {
+    const moneda = /^(VES|USD|USDT|USDC|BS\.?)$/i;
+    for (const s of raiz.querySelectorAll('span')) {
+        const sig = s.nextElementSibling;
+        if (sig && sig.tagName === 'SPAN' &&
+            moneda.test(sig.textContent.trim()) &&
+            /^[\d.,]+$/.test(s.textContent.trim())) {
+            log("Monto encontrado por estructura (sin clase)");
+            return s;
+        }
+    }
+    return null;
+}
 
     function debounce(fn, ms) {
         let t;
@@ -737,7 +752,8 @@
                 if (!ordenActual) { mostrarDiagnostico("❌ Orden vacía"); return; }
                 if (ordenActual === ultimaOrden) return;
 
-                const montoEl = querySelector(CFG.SELECTORS.monto);
+                const raiz = ordenEl.closest('[role="dialog"]') || document;
+                const montoEl = querySelector(CFG.SELECTORS.monto) || buscarMontoEstructural(raiz);
                 if (!montoEl) {
                     mostrarDiagnostico("❌ No se encontró el monto. Selector puede haber cambiado.");
                     return;
