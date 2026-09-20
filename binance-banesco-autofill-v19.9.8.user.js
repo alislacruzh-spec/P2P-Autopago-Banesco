@@ -298,6 +298,8 @@
         '0108': 'cuenta_tercero_opc30',    // Provincial → opc=30, "Código de Cuenta"
         '0172': 'cuenta_tercero_opc30',    // Bancamiga → opc=30, "Código de Cuenta"
         '0191': 'cuenta_tercero_opc30',    // BNC → opc=30, "Código de Cuenta"
+        '0114': 'cuenta_tercero_opc30',    // Bancaribe → opc=30, "Código de Cuenta"
+        
     };
 
     function extraerNumeroCuentaGenerico(raw) {
