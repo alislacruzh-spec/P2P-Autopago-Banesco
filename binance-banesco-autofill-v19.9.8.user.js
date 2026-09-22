@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.2
+// @version      19.9.8.3
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -481,7 +481,7 @@ function buscarMontoEstructural(raiz) {
         const btn = document.createElement('button');
         btn.id = 'p2p-forzar-opc30-btn';
         btn.style.cssText = `
-            position:fixed; bottom:16px; right:16px; z-index:999999;
+            position:fixed; top:60px; right:16px; z-index:999999;
             padding:10px 14px; border:none; border-radius:8px;
             font-family:Arial,sans-serif; font-size:13px; font-weight:bold;
             cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.35);
@@ -490,8 +490,8 @@ function buscarMontoEstructural(raiz) {
         function actualizarEstiloBoton() {
             const activo = getForzarOpc30();
             btn.textContent = activo
-                ? '✅ Pago Móvil → opc=30 (TODOS los bancos): ACTIVADO'
-                : '⬜ Pago Móvil → opc=30 (TODOS los bancos): DESACTIVADO';
+                ? '✅ Transferencia telefónica: ACTIVADO'
+                : '⬜ Transferencia telefónica: DESACTIVADO';
             btn.style.background = activo ? '#1a7a1a' : '#444';
             btn.style.color = '#fff';
         }
