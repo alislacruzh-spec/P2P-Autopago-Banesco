@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.5
+// @version      19.9.8.6
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -69,11 +69,11 @@
                 '[class*="infoRow"]',
             ],
         },
-        RETRY_INTERVAL_MS:   50,
+        RETRY_INTERVAL_MS:   200,
         RETRY_MAX_ATTEMPTS:  25,
-        RETRY_MIN_SUCCESSES: 2,
+        RETRY_MIN_SUCCESSES: 4,
         DEBOUNCE_MS:         50,
-        REDIRECT_DELAY_MS:   30,
+        REDIRECT_DELAY_MS:   300,
         MAX_PAYLOAD_AGE_MS:  10 * 60 * 1000, // 10 min — payloads más viejos se descartan
         GM_KEY:              "p2p_payload_v3",
         URLS_BANESCO: {
