@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.7
+// @version      19.9.8.8
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -1181,10 +1181,14 @@ function buscarMontoEstructural(raiz) {
             const elTip = byNameOrId('TipTrans');
             if (!elTip) return false;
 
-            setSelect(elTip, valorTipTrans);
-            tipTransAplicado = true;
-            log('Auto Select: TipTrans aplicado a "' + valorTipTrans + '".');
-            return true;
+            const ok = setSelect(elTip, valorTipTrans);
+            if (ok) {
+                tipTransAplicado = true;
+                log('Auto Select: TipTrans aplicado a "' + valorTipTrans + '".');
+            } else {
+                log('Auto Select: TipTrans — opción "' + valorTipTrans + '" aún no disponible, reintentando…');
+            }
+            return ok;
         }
 
         // PASO 3 (best-effort, no bloqueante) — Nacionalidad del documento
