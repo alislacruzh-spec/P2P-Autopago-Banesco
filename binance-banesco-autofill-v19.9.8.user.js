@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.8
+// @version      19.9.8.9
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -70,7 +70,7 @@
             ],
         },
         RETRY_INTERVAL_MS:   200,
-        RETRY_MAX_ATTEMPTS:  25,
+        RETRY_MAX_ATTEMPTS:  30,
         RETRY_MIN_SUCCESSES: 4,
         DEBOUNCE_MS:         50,
         REDIRECT_DELAY_MS:   300,
@@ -1342,7 +1342,7 @@ function buscarMontoEstructural(raiz) {
 
                 const intervalo = setInterval(() => {
                     const listo = intentarAplicarEstructura();
-                    if (listo || Date.now() - inicio > 3000) {
+                    if (listo || Date.now() - inicio > 4500) {
                         clearInterval(intervalo);
                         // El cambio de TipTrans solo alterna visibilidad de divs por
                         // JS del lado del cliente (confirmado por HTML real: todos
