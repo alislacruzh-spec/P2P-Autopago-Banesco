@@ -488,7 +488,7 @@ function buscarMontoEstructural(raiz) {
         const btn = document.createElement('button');
         btn.id = 'p2p-forzar-opc30-btn';
         btn.style.cssText = `
-            position:fixed; top:60px; right:16px; z-index:999999;
+            position:fixed; bottom:56px; left:16px; z-index:999999;
             padding:10px 14px; border:none; border-radius:8px;
             font-family:Arial,sans-serif; font-size:13px; font-weight:bold;
             cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.35);
@@ -933,7 +933,7 @@ function buscarMontoEstructural(raiz) {
             btn.id = 'p2p-pegado-manual-btn';
             btn.textContent = '📋 Pegar datos manualmente';
             btn.style.cssText = `
-                position:fixed; bottom:16px; right:16px; z-index:999999;
+                position:fixed; bottom:16px; left:16px; z-index:999999;
                 padding:10px 14px; border:none; border-radius:8px;
                 font-family:Arial,sans-serif; font-size:13px; font-weight:bold;
                 cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.35);
