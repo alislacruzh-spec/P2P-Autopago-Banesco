@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.12
+// @version      19.9.8.10
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -69,11 +69,11 @@
                 '[class*="infoRow"]',
             ],
         },
-        RETRY_INTERVAL_MS:   200,
-        RETRY_MAX_ATTEMPTS:  30,
-        RETRY_MIN_SUCCESSES: 4,
+        RETRY_INTERVAL_MS:   150,  // antes 50 — más tolerante a un tab lento/pesado (25×50ms=1.25s totales era muy ajustado)
+        RETRY_MAX_ATTEMPTS:  30,   // antes 25 — con 150ms de intervalo, esto da ~4.5s de presupuesto total
+        RETRY_MIN_SUCCESSES: 2,
         DEBOUNCE_MS:         50,
-        REDIRECT_DELAY_MS:   300,
+        REDIRECT_DELAY_MS:   400,  // antes 30 — le da tiempo al DOM a terminar de renderizar tras el redirect, bajo carga
         MAX_PAYLOAD_AGE_MS:  10 * 60 * 1000, // 10 min — payloads más viejos se descartan
         GM_KEY:              "p2p_payload_v3",
         URLS_BANESCO: {
@@ -314,14 +314,7 @@ function buscarMontoEstructural(raiz) {
         '0172': 'cuenta_tercero_opc30',    // Bancamiga → opc=30, "Código de Cuenta"
         '0191': 'cuenta_tercero_opc30',    // BNC → opc=30, "Código de Cuenta"
         '0114': 'cuenta_tercero_opc30',    // Bancaribe → opc=30, "Código de Cuenta"
-        '0104': 'cuenta_tercero_opc30',    // BVC → opc=30, "Código de Cuenta"
-        '0175': 'cuenta_tercero_opc30',    // BDT → opc=30, "Código de Cuenta"
-        '0102': 'cuenta_tercero_opc30',    // BDV → opc=30, "Código de Cuenta"
-        '0174': 'cuenta_tercero_opc30',    // Banplus → opc=30, "Código de Cuenta"
-        '0163': 'cuenta_tercero_opc30',    // Banco del Tesoro → opc=30, "Código de Cuenta"
-        '0171': 'cuenta_tercero_opc30',    // Banco Activo → opc=30, "Código de Cuenta"
-        '0138': 'cuenta_tercero_opc30',    // Banco Plaza → opc=30, "Código de Cuenta"
-        '0151': 'cuenta_tercero_opc30',    // BFC → opc=30, "Código de Cuenta"
+        
     };
 
     function extraerNumeroCuentaGenerico(raw) {
@@ -873,6 +866,7 @@ function buscarMontoEstructural(raiz) {
 
         if (document.readyState === 'loading') {
             document.addEventListener('DOMContentLoaded', crearBotonForzarOpc30);
+            document.addEventListener('DOMContentLoaded', crearBotonPegadoManual);
         } else {
             crearBotonForzarOpc30();
             crearBotonPegadoManual();
@@ -914,7 +908,7 @@ function buscarMontoEstructural(raiz) {
             try { return JSON.parse(raw); } catch (_) { return null; }
         }
 
-                /* ============================================
+        /* ============================================
            ★ BOTÓN DE PEGADO MANUAL
            Si el pegado automático falla (o el usuario simplemente quiere
            forzar un re-pegado sin esperar al vigilante), este botón ejecuta
@@ -928,7 +922,7 @@ function buscarMontoEstructural(raiz) {
         function crearBotonPegadoManual() {
             if (window.top !== window.self) return;
             if (document.getElementById('p2p-pegado-manual-btn')) return;
- 
+
             const btn = document.createElement('button');
             btn.id = 'p2p-pegado-manual-btn';
             btn.textContent = '📋 Pegar datos manualmente';
@@ -939,7 +933,7 @@ function buscarMontoEstructural(raiz) {
                 cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.35);
                 background:#1a4a7a; color:#fff;
             `;
- 
+
             btn.onclick = () => {
                 const p = getPayload() || payload;
                 if (!p) {
@@ -951,14 +945,39 @@ function buscarMontoEstructural(raiz) {
                     }]);
                     return;
                 }
+
+                // Asegura que las funciones estructurales (más abajo) usen
+                // este mismo payload, aunque `payload` en memoria hubiera
+                // quedado null (ej. si vino solo de GM storage).
+                payload = p;
+
+                // ★ Los campos "estructurales" (cuenta de origen, TipTrans,
+                // banco/nacionalidad de Código de Cuenta, ddlCuentaDebitar/
+                // ddlNac de tercerosbanesco) se aplican UNA sola vez por
+                // diseño — evita reintentar postbacks innecesariamente. Pero
+                // eso significa que si Banesco los vació DESPUÉS de la
+                // primera aplicación (ej. al limpiar el formulario), el
+                // ciclo automático nunca los repone. El botón manual sí
+                // fuerza la reevaluación completa, reseteando las banderas
+                // "ya aplicado" antes de pegar.
+                cuentaOrigenAplicada = false;
+                tipTransAplicado = false;
+                bancoCtaAplicado = false;
+                nacCtaEvaluado = false;
+                cuentaDebitarTercerosAplicada = false;
+                ddlNacTercerosEvaluado = false;
+
+                intentarAplicarEstructura();
+                aplicarCamposTercerosBanesco(p);
+
                 log('Pegado manual solicitado por el usuario. Payload:', p);
                 registrarEvento('Pegado manual solicitado por el usuario (tipo=' + p.tipo + ').');
                 pegarTodo(p);
             };
- 
+
             document.body.appendChild(btn);
         }
-        
+
         function asegurarPagina(p) {
             const urlDestino = CFG.URLS_BANESCO[p.tipo];
             if (!urlDestino) return true;
@@ -1227,6 +1246,13 @@ function buscarMontoEstructural(raiz) {
             const elTip = byNameOrId('TipTrans');
             if (!elTip) return false;
 
+            // ★ FIX: antes se ignoraba el resultado de setSelect() y se
+            // marcaba tipTransAplicado=true incondicionalmente. Si el
+            // <select> todavía no tenía la opción "Código de Cuenta" (sus
+            // opciones pueden tardar en poblarse tras elegir la cuenta de
+            // origen), el script quedaba convencido de haberlo aplicado y
+            // NUNCA volvía a intentarlo — dejando el formulario en el
+            // sub-flujo equivocado y, por lo tanto, sin pegar los datos.
             const ok = setSelect(elTip, valorTipTrans);
             if (ok) {
                 tipTransAplicado = true;
@@ -1366,10 +1392,10 @@ function buscarMontoEstructural(raiz) {
                     const inicio = Date.now();
                     const intervalo = setInterval(() => {
                         const listo = aplicarCamposTercerosBanesco(payload);
-                        if (listo || Date.now() - inicio > 2000) {
+                        if (listo || Date.now() - inicio > 5000) {
                             clearInterval(intervalo);
                             if (!listo) {
-                                warn('Auto Select (tercerosbanesco): no se pudo aplicar ddlCuentaDebitar tras 2s. Continuando de todas formas.');
+                                warn('Auto Select (tercerosbanesco): no se pudo aplicar ddlCuentaDebitar tras 5s. Continuando de todas formas.');
                             }
                             resolve();
                         }
@@ -1388,7 +1414,7 @@ function buscarMontoEstructural(raiz) {
 
                 const intervalo = setInterval(() => {
                     const listo = intentarAplicarEstructura();
-                    if (listo || Date.now() - inicio > 4500) {
+                    if (listo || Date.now() - inicio > 6000) {
                         clearInterval(intervalo);
                         // El cambio de TipTrans solo alterna visibilidad de divs por
                         // JS del lado del cliente (confirmado por HTML real: todos
@@ -1397,7 +1423,7 @@ function buscarMontoEstructural(raiz) {
                         // que el margen extra puede ser mínimo.
                         const margen = (listo && !yaEstabaListo) ? 200 : 0;
                         if (!listo) {
-                            warn('Auto Select: no se pudo completar la estructura del formulario (cuenta de origen / Método de Transferencia) tras 3s. Continuando de todas formas.');
+                            warn('Auto Select: no se pudo completar la estructura del formulario (cuenta de origen / Método de Transferencia / banco / nacionalidad) tras 6s. Continuando de todas formas.');
                         }
                         setTimeout(resolve, margen);
                     }
@@ -1424,7 +1450,7 @@ function buscarMontoEstructural(raiz) {
                 aplicarCamposSeguros();
                 intentarAplicarEstructura();
                 aplicarCamposTercerosBanesco(payload);
-                if (++intentosAutoSelect >= 30) clearInterval(ivAutoSelect); // ~15 s (500ms x 30)
+                if (++intentosAutoSelect >= 40) clearInterval(ivAutoSelect); // ~20 s (500ms x 40)
             }, 500);
         }
 
