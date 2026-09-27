@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.9
+// @version      19.9.8.10
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -913,6 +913,51 @@ function buscarMontoEstructural(raiz) {
             try { return JSON.parse(raw); } catch (_) { return null; }
         }
 
+                /* ============================================
+           ★ BOTÓN DE PEGADO MANUAL
+           Si el pegado automático falla (o el usuario simplemente quiere
+           forzar un re-pegado sin esperar al vigilante), este botón ejecuta
+           pegarTodo() una sola vez con el último payload disponible — la
+           misma función que usa el ciclo automático, así que valida los
+           campos igual (aparece la notificación verde/roja de siempre).
+           Toma el payload primero de GM storage (getPayload(), la fuente
+           persistente) y, si no hay nada ahí, cae al `payload` en memoria
+           por si ya se había capturado en esta misma carga de página.
+        ============================================ */
+        function crearBotonPegadoManual() {
+            if (window.top !== window.self) return;
+            if (document.getElementById('p2p-pegado-manual-btn')) return;
+ 
+            const btn = document.createElement('button');
+            btn.id = 'p2p-pegado-manual-btn';
+            btn.textContent = '📋 Pegar datos manualmente';
+            btn.style.cssText = `
+                position:fixed; bottom:16px; right:16px; z-index:999999;
+                padding:10px 14px; border:none; border-radius:8px;
+                font-family:Arial,sans-serif; font-size:13px; font-weight:bold;
+                cursor:pointer; box-shadow:0 2px 10px rgba(0,0,0,0.35);
+                background:#1a4a7a; color:#fff;
+            `;
+ 
+            btn.onclick = () => {
+                const p = getPayload() || payload;
+                if (!p) {
+                    mostrarNotificacion(false, [{
+                        campo: 'Pegado manual',
+                        esperado: 'un pago ya capturado',
+                        obtenido: 'no hay ningún pago capturado en este momento',
+                        coincide: false,
+                    }]);
+                    return;
+                }
+                log('Pegado manual solicitado por el usuario. Payload:', p);
+                registrarEvento('Pegado manual solicitado por el usuario (tipo=' + p.tipo + ').');
+                pegarTodo(p);
+            };
+ 
+            document.body.appendChild(btn);
+        }
+        
         function asegurarPagina(p) {
             const urlDestino = CFG.URLS_BANESCO[p.tipo];
             if (!urlDestino) return true;
