@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.13
+// @version      19.9.8.14
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -314,6 +314,11 @@ function buscarMontoEstructural(raiz) {
         '0172': 'cuenta_tercero_opc30',    // Bancamiga → opc=30, "Código de Cuenta"
         '0191': 'cuenta_tercero_opc30',    // BNC → opc=30, "Código de Cuenta"
         '0114': 'cuenta_tercero_opc30',    // Bancaribe → opc=30, "Código de Cuenta"
+        '0163': 'cuenta_tercero_opc30',    // Banco del tesoro → opc=30, "Código de Cuenta"
+        '0102': 'cuenta_tercero_opc30',    // Banco de Venezuela → opc=30, "Código de Cuenta"
+        '0104': 'cuenta_tercero_opc30',    // Banco Venezolano de Credito → opc=30, "Código de Cuenta"
+        '0174': 'cuenta_tercero_opc30',    // Banplus de Credito → opc=30, "Código de Cuenta"
+        '0138': 'cuenta_tercero_opc30',    // Banco Plaza → opc=30, "Código de Cuenta"
         
     };
 
