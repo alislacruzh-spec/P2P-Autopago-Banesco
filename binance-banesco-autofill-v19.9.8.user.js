@@ -1,6 +1,6 @@
 // ==UserScript==
 // @name         Binance → Banesco Transferencia telefonica / Transferencia V19.9.8 (+ Auto Select configurable)
-// @version      19.9.8.15
+// @version      19.9.8.16
 // @updateURL    https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @downloadURL  https://raw.githubusercontent.com/alislacruzh-spec/P2P-Autopago-Banesco/main/binance-banesco-autofill-v19.9.8.user.js
 // @match        https://c2c-admin.binance.com/*
@@ -320,7 +320,7 @@ function buscarMontoEstructural(raiz) {
         '0104': 'cuenta_tercero_opc30',    // Banco Venezolano de Credito → opc=30, "Código de Cuenta"
         '0174': 'cuenta_tercero_opc30',    // Banplus de Credito → opc=30, "Código de Cuenta"
         '0138': 'cuenta_tercero_opc30',    // Banco Plaza → opc=30, "Código de Cuenta"
-        
+
     };
 
     function extraerNumeroCuentaGenerico(raw) {
@@ -359,7 +359,7 @@ function buscarMontoEstructural(raiz) {
     ];
 
     const bancosMapOpc24 = [
-        { regex: /\b(0105|banesco)\b/i,                                                    value: "0134", priority: 2 },
+        { regex: /\b(0134|banesco)\b/i,                                                    value: "0134", priority: 2 },
         { regex: /\b(0191|bnc|banco\s*nacional\s*de\s*credito|nacional\s*credito)\b/i,     value: "0191", priority: 2 },
         { regex: /\b(0172|bancamiga|banca\s*amiga)\b/i,                                    value: "0172", priority: 2 },
         { regex: /\b(0108|provincial|bbva)\b/i,                                            value: "0108", priority: 2 },
@@ -463,6 +463,16 @@ function buscarMontoEstructural(raiz) {
         if (getForzarOpc30()) {
             const mapaCompleto = [...bancosMapOpc30, ...bancosMapOpc24ConSufijoOpc30()];
             const banco = detectarBanco(items, mapaCompleto);
+
+            // ★ Banesco NO existe en la lista de bancos de opc=30 (Teléfono
+            // Operaciones Inmediatas / Código de Cuenta son para otros bancos).
+            // Aunque el interruptor esté activo, Banesco se enruta a opc=24.
+            if (banco === '0134|A' || banco === '01|A') {
+                const bancoOpc24 = detectarBanco(items, bancosMapOpc24);
+                log(`[Forzar opc=30 ACTIVO] Banco Banesco detectado → se excluye, va a opc=24 (pago_movil_otros) con valor ${bancoOpc24}`);
+                return { banco: bancoOpc24, tipo: "pago_movil_otros" };
+            }
+
             log(`[Forzar opc=30 ACTIVO] Banco detectado: ${banco} → tipo: pago_movil (forzado)`);
             return { banco, tipo: "pago_movil" };
         }
@@ -988,21 +998,136 @@ function buscarMontoEstructural(raiz) {
             const urlDestino = CFG.URLS_BANESCO[p.tipo];
             if (!urlDestino) return true;
 
+            // ★ El formulario vive dentro de un iframe, pero la URL destino
+            // (aplicacion.aspx?opc=30) es la de la VENTANA PRINCIPAL. Antes el
+            // iframe comparaba SU PROPIA URL, nunca coincidía, y hacía
+            // location.href DENTRO de sí mismo → página dentro de la página →
+            // Banesco recargaba todo (doble recarga).
+            // Ahora: la página es correcta si coincide la URL del frame actual
+            // O la de la ventana principal; y si hay que redirigir, se
+            // redirige SIEMPRE la ventana principal, nunca el iframe.
+            let ventanaTop = window;
+            try {
+                ventanaTop = window.top;
+                void ventanaTop.location.pathname; // falla si fuera de otro dominio
+            } catch (_) {
+                ventanaTop = window;
+            }
+
+            const urlFrame = location.pathname + location.search;
+            const urlTop   = ventanaTop.location.pathname + ventanaTop.location.search;
+
+            if (urlFrame === urlDestino || urlTop === urlDestino) {
+                return true;
+            }
+
             const yaRedirigido = sessionStorage.getItem('p2p_redirected_orden');
             if (yaRedirigido === p.orden) {
                 log("Ya redirigimos para la orden:", p.orden);
                 return true;
             }
 
-            const actualCompleta = location.pathname + location.search;
-            if (actualCompleta !== urlDestino) {
-                sessionStorage.setItem('p2p_redirected_orden', p.orden);
-                log("Redirigiendo a:", urlDestino, "| tipo:", p.tipo);
-                location.href = urlDestino;
+            sessionStorage.setItem('p2p_redirected_orden', p.orden);
+            log("Redirigiendo (ventana principal) a:", urlDestino, "| tipo:", p.tipo,
+                window.top !== window.self ? "[desde iframe]" : "");
+            ventanaTop.location.href = urlDestino;
+            return false;
+        }
+
+        // ★ v19.9.9.5 — Que la URL coincida NO basta. Después de pagar, Banesco
+        // muestra la pantalla de confirmación/recibo en la MISMA URL
+        // (aplicacion.aspx?opc=30). asegurarPagina() veía la URL correcta y
+        // no redirigía, pero el formulario ya no estaba → no se pegaba nada
+        // hasta que el usuario redirigía a mano. Antes esto "funcionaba" por
+        // casualidad porque el iframe se redirigía siempre a sí mismo.
+        // Ahora se comprueba también que el formulario exista (en la ventana
+        // principal o en cualquiera de sus iframes).
+        const SELECTORES_FORMULARIO = {
+            pago_movil:            '#TipTrans, [name="TipTrans"], #tel, #cuentacliente',
+            cuenta_tercero_opc30:  '#TipTrans, [name="TipTrans"], #tel, #cuentacliente',
+            pago_movil_otros:      '#tel, #monto',
+            transferencia_banesco: '#ctl00_cp_wz_txtCuentaTransferir',
+        };
+
+        function obtenerVentanaTop() {
+            try {
+                void window.top.location.pathname; // falla si fuera de otro dominio
+                return window.top;
+            } catch (_) {
+                return window;
+            }
+        }
+
+        function formularioPresente(tipo) {
+            const selector = SELECTORES_FORMULARIO[tipo];
+            if (!selector) return true; // tipo sin formulario conocido: no bloquear
+            function buscar(win) {
+                try {
+                    if (win.document.querySelector(selector)) return true;
+                    for (let i = 0; i < win.frames.length; i++) {
+                        if (buscar(win.frames[i])) return true;
+                    }
+                } catch (_) { /* frame de otro dominio o aún cargando */ }
                 return false;
             }
+            return buscar(obtenerVentanaTop());
+        }
 
-            return true;
+        // ¿Terminaron de cargar la ventana principal y todos sus iframes?
+        function todosLosFramesCargados() {
+            function revisar(win) {
+                try {
+                    if (win.document.readyState !== 'complete') return false;
+                    for (let i = 0; i < win.frames.length; i++) {
+                        if (!revisar(win.frames[i])) return false;
+                    }
+                } catch (_) { /* frame de otro dominio: se ignora */ }
+                return true;
+            }
+            return revisar(obtenerVentanaTop());
+        }
+
+        // Resuelve true si estamos en la página correcta Y el formulario
+        // existe. Si la URL es correcta pero el formulario no está (ej.
+        // pantalla de confirmación del pago anterior), recarga la ventana
+        // principal en la URL destino — UNA sola vez por orden.
+        // ★ v19.9.9.6 — Antes esperaba SIEMPRE 3 s antes de recargar (la
+        // demora que se notaba tras capturar la orden). Ahora: si la página
+        // ya terminó de cargar y el formulario no está, recarga a los
+        // ~300 ms. Los 3 s quedan solo como tope si Banesco sigue cargando.
+        const GRACIA_SIN_FORMULARIO_MS = 300;
+        const TOPE_SIN_FORMULARIO_MS   = 3000;
+
+        function asegurarPaginaConFormulario(p) {
+            if (!asegurarPagina(p)) return Promise.resolve(false); // ya está redirigiendo
+            const urlDestino = CFG.URLS_BANESCO[p.tipo];
+            if (!urlDestino) return Promise.resolve(true);
+            // Caso normal (formulario ya visible): seguir sin esperar nada.
+            if (formularioPresente(p.tipo)) return Promise.resolve(true);
+
+            return new Promise((resolve) => {
+                const inicio = Date.now();
+                const iv = setInterval(() => {
+                    if (payload !== p) { clearInterval(iv); resolve(false); return; } // llegó otra orden
+                    if (formularioPresente(p.tipo)) { clearInterval(iv); resolve(true); return; }
+                    const transcurrido = Date.now() - inicio;
+                    const paginaQuieta = todosLosFramesCargados() && transcurrido >= GRACIA_SIN_FORMULARIO_MS;
+                    if (!paginaQuieta && transcurrido < TOPE_SIN_FORMULARIO_MS) return;
+
+                    clearInterval(iv);
+                    if (sessionStorage.getItem('p2p_redirected_orden') === p.orden) {
+                        // Ya recargamos una vez para esta orden: no hacer bucle.
+                        warn('Formulario no encontrado tras recargar para la orden', p.orden, '— se intenta pegar igual.');
+                        resolve(true);
+                        return;
+                    }
+                    sessionStorage.setItem('p2p_redirected_orden', p.orden);
+                    log('URL correcta pero sin formulario (¿pantalla de confirmación?). Recargando a:', urlDestino);
+                    registrarEvento('Sin formulario en la URL destino → recargando ventana principal (orden ' + p.orden + ').');
+                    obtenerVentanaTop().location.href = urlDestino;
+                    resolve(false);
+                }, 100);
+            });
         }
 
         // Regla compartida: selecciona "V" en el <select> de nacionalidad
@@ -1466,11 +1591,30 @@ function buscarMontoEstructural(raiz) {
             iniciarAutoSelect();
         }
 
+        let vigilanteTimer = null;
+
         function iniciarReintentos(p) {
+            // ★ Orden nueva SIN recarga de página: hay que resetear las
+            // banderas "ya aplicado". Antes la doble recarga las reseteaba
+            // sola; ahora que no hay recarga, se quedaban en true desde la
+            // orden anterior y TipTrans nunca cambiaba (ej. se quedaba en
+            // "Código de Cuenta" y Pago Móvil se pegaba en campos ocultos).
+            const esOrdenNueva = !payload || payload.orden !== p.orden;
+            if (esOrdenNueva) {
+                cuentaOrigenAplicada = false;
+                tipTransAplicado = false;
+                bancoCtaAplicado = false;
+                nacCtaEvaluado = false;
+                cuentaDebitarTercerosAplicada = false;
+                ddlNacTercerosEvaluado = false;
+                registrarEvento('Orden nueva ' + p.orden + ' (tipo=' + p.tipo + ') → banderas reseteadas.');
+            }
+
             payload  = p;
             intentos = 0;
             let exitososConsecutivos = 0;
             clearInterval(retryTimer);
+            clearInterval(vigilanteTimer); // ★ detener el vigilante de la orden anterior
 
             // PRIMERO nos aseguramos de estar en la página correcta. Si hace
             // falta redirigir, lo hacemos AHORA MISMO — esperar la estructura
@@ -1481,18 +1625,18 @@ function buscarMontoEstructural(raiz) {
             // (la página va a navegar); la NUEVA carga de página recogerá el
             // payload de nuevo desde GM storage y volverá a llamar a esta
             // misma función, esta vez ya en la página correcta.
-            if (!asegurarPagina(p)) {
-                log('Redirigiendo hacia la página correcta; se reanudará automáticamente al cargar.');
-                return;
-            }
+            asegurarPaginaConFormulario(p).then((paginaOk) => {
+                if (!paginaOk) {
+                    log('Redirigiendo hacia la página correcta (o llegó otra orden); se reanudará automáticamente.');
+                    return;
+                }
 
-            log(`Preparando estructura del formulario antes de pegar datos...`);
+                log(`Preparando estructura del formulario antes de pegar datos...`);
 
-            // Ahora sí: nos aseguramos de que los campos "estructurales" (los
-            // que pueden requerir que otro campo se seleccione primero, como
-            // el Método de Transferencia dependiendo de la cuenta de origen)
-            // ya se aplicaron, antes de empezar a pegar el payload.
-            prepararEstructuraYObtenerPromesa().then(() => {
+                // Ahora sí: nos aseguramos de que los campos "estructurales"
+                // ya se aplicaron, antes de empezar a pegar el payload.
+                prepararEstructuraYObtenerPromesa().then(() => {
+                if (payload !== p) return; // otra orden tomó el control mientras esperábamos
                 setTimeout(() => {
                     retryTimer = setInterval(() => {
                         intentos++;
@@ -1535,7 +1679,8 @@ function buscarMontoEstructural(raiz) {
                         }
                     }, CFG.RETRY_INTERVAL_MS);
                 }, CFG.REDIRECT_DELAY_MS);
-            });
+                }); // fin prepararEstructuraYObtenerPromesa
+            }); // fin asegurarPaginaConFormulario
         }
 
         // Revisa cada 700ms, durante ~15 segundos, si los campos clave siguen
@@ -1550,7 +1695,8 @@ function buscarMontoEstructural(raiz) {
             let revisiones = 0;
             const MAX_REVISIONES = 22; // ~15s a 700ms
 
-            const vigilante = setInterval(() => {
+            clearInterval(vigilanteTimer);
+            vigilanteTimer = setInterval(() => {
                 revisiones++;
                 if (algunCampoVacio(payloadFinal)) {
                     llenosConsecutivos = 0;
@@ -1562,14 +1708,17 @@ function buscarMontoEstructural(raiz) {
                 }
 
                 if (llenosConsecutivos >= 3 || revisiones >= MAX_REVISIONES) {
-                    clearInterval(vigilante);
+                    clearInterval(vigilanteTimer);
                     log('Vigilante finalizado (' +
                         (llenosConsecutivos >= 3 ? 'campos estables' : 'tiempo máximo alcanzado') + ').');
                     registrarEvento('Vigilante finalizado: ' + (llenosConsecutivos >= 3 ? 'campos estables' : 'tiempo máximo') + '. Borrando payload compartido.');
                     // Recién ahora es seguro borrar el payload compartido:
                     // los campos llevan varias revisiones seguidas llenos
                     // (o agotamos el tiempo de observación de todas formas).
-                    GM_deleteValue(CFG.GM_KEY);
+                      const actual = getPayload();
+                    if (actual && actual.orden === payloadFinal.orden) {
+                        GM_deleteValue(CFG.GM_KEY);
+                    }
                 }
             }, 700);
         }
